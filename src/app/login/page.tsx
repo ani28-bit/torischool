@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -59,8 +60,9 @@ export default function LoginPage() {
 
   return (
     <main
-    id="main-content"
-    className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      id="main-content"
+      className="flex min-h-screen items-center justify-center bg-gray-50 px-4"
+    >
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-md">
         <h1 className="mb-2 text-2xl font-bold text-gray-900">
           Tori School Login
@@ -99,6 +101,15 @@ export default function LoginPage() {
               className="w-full rounded-lg border p-3"
               placeholder="Enter your password"
             />
+
+            <div className="mt-2 text-right">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-blue-700 hover:underline"
+              >
+                Forgot Password?
+              </Link>
+            </div>
           </div>
 
           {error && (

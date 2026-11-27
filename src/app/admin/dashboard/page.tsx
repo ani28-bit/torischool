@@ -193,41 +193,54 @@ export default async function AdminDashboard() {
 
   const navigationCards = [
     {
-  title: "Recruitment",
-  description: "Create recruitment periods and manage application status.",
-  href: "/admin/recruitment",
-  label: "Manage recruitment",
-},
+      title: "Recruitment",
+      description:
+        "Create recruitment periods and manage application status.",
+      href: "/admin/recruitment",
+      label: "Manage recruitment",
+    },
     {
       title: "Volunteer Management",
-      description: "Manage selected applicants and registered volunteers.",
+      description:
+        "Manage selected applicants and registered volunteers.",
       href: "/admin/volunteers",
       label: "Manage volunteers",
     },
     {
       title: "Attendance",
-      description: "Create sessions and manage volunteer attendance.",
+      description:
+        "Create sessions and manage volunteer attendance.",
       href: "/admin/attendance",
       label: "Manage attendance",
     },
     {
       title: "Leave Management",
-      description: "Review and manage volunteer leave applications.",
+      description:
+        "Review and manage volunteer leave applications.",
       href: "/admin/volunteers/leaves",
       label: "Manage leaves",
     },
     {
       title: "Evaluations",
-      description: "Generate and review weekly and monthly evaluations.",
+      description:
+        "Generate and review weekly and monthly evaluations.",
       href: "/admin/evaluations",
       label: "Manage evaluations",
+    },
+    {
+      title: "Justifications",
+      description:
+        "Review volunteer absence justifications and provide feedback.",
+      href: "/admin/justifications",
+      label: "Manage justifications",
     },
   ];
 
   return (
     <main
-    id="main-content"
-    className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      id="main-content"
+      className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-8 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         {/* Dashboard Header */}
         <header className="rounded-2xl border border-line bg-cream p-5 shadow-sm sm:p-7">
@@ -404,7 +417,7 @@ export default async function AdminDashboard() {
         {/* Footer Note */}
         <footer className="mt-12 border-t border-line py-6">
           <p className="text-center text-xs leading-5 text-muted/70">
-           Tori School Administration &#183; Volunteer Management System
+            Tori School Administration &#183; Volunteer Management System
           </p>
         </footer>
       </div>

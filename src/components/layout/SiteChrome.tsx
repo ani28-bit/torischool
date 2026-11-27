@@ -16,6 +16,8 @@ export function SiteChrome({ children }: SiteChromeProps) {
   const isPortal =
     pathname.startsWith("/admin") ||
     pathname === "/volunteer/dashboard" ||
+    pathname === "/volunteer/attendance" ||
+    pathname === "/volunteer/justifications" ||
     pathname === "/volunteer/evaluations" ||
     pathname === "/volunteer/leaves";
 

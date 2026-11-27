@@ -28,18 +28,19 @@ export default async function VolunteerDashboard() {
     redirect("/login");
   }
 
+  // 3. Dashboard cards
   const dashboardCards = [
     {
       title: "My Attendance",
       description: "View your attendance records.",
-      href: null,
-      action: "Attendance information",
+      href: "/volunteer/attendance",
+      action: "View Attendance",
     },
     {
       title: "My Justifications",
       description: "Submit and track absence justifications.",
-      href: null,
-      action: "Justification information",
+      href: "/volunteer/justifications",
+      action: "View Justifications",
     },
     {
       title: "My Evaluations",
@@ -57,8 +58,9 @@ export default async function VolunteerDashboard() {
 
   return (
     <main
-    id="main-content"
-    className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      id="main-content"
+      className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-8 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         {/* Dashboard Header */}
         <header className="rounded-2xl border border-line bg-cream p-5 shadow-sm sm:p-7">

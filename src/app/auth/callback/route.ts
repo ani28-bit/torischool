@@ -10,6 +10,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient();
 
+  // Handle PKCE email links
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -17,29 +18,33 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/auth/set-password`);
     }
 
-    console.error("Invitation PKCE verification error:", error.message);
+    console.error("PKCE verification error:", error.message);
   }
 
-  if (tokenHash && type === "invite") {
+  // Handle invitation and password recovery OTP links
+  if (
+    tokenHash &&
+    (type === "invite" || type === "recovery")
+  ) {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "invite",
+      type,
     });
 
     if (!error) {
       return NextResponse.redirect(`${origin}/auth/set-password`);
     }
 
-    console.error("Invitation OTP verification error:", error.message);
+    console.error("OTP verification error:", error.message);
   }
 
-  console.error("Invitation callback parameters:", {
+  console.error("Auth callback parameters:", {
     hasCode: Boolean(code),
     hasTokenHash: Boolean(tokenHash),
     type,
   });
 
   return NextResponse.redirect(
-    `${origin}/login?error=invitation_verification_failed`
+    `${origin}/login?error=verification_failed`
   );
 }
