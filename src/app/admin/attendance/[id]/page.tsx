@@ -10,6 +10,7 @@ type PageProps = {
     error?: string;
     completed?: string;
     saved?: string;
+    unchanged?: string;
   }>;
 };
 
@@ -18,7 +19,7 @@ export default async function SessionDetailsPage({
   searchParams,
 }: PageProps) {
   const { id } = await params;
-  const { error, saved, completed } = await searchParams;
+  const { error, saved, completed, unchanged } = await searchParams;
 
   const supabase = await createClient();
 
@@ -52,10 +53,7 @@ export default async function SessionDetailsPage({
 
   if (sessionError || !session) {
     return (
-      <main
-        id="main-content"
-        className="min-h-screen bg-gray-50 p-8"
-      >
+      <main id="main-content" className="min-h-screen bg-gray-50 p-8">
         <div className="mx-auto max-w-6xl">
           <Link
             href="/admin/attendance"
@@ -64,9 +62,7 @@ export default async function SessionDetailsPage({
             &#8592; Back to Attendance
           </Link>
 
-          <p className="mt-6 text-red-600">
-            Session not found.
-          </p>
+          <p className="mt-6 text-red-600">Session not found.</p>
         </div>
       </main>
     );
@@ -91,7 +87,7 @@ export default async function SessionDetailsPage({
     .lte("joining_date", session.session_date)
     .order("volunteer_code");
 
-  // 5. Fetch approved leaves for this date
+  // 5. Fetch approved leaves
   const { data: leaves, error: leavesError } = await supabase
     .from("volunteer_leaves")
     .select("volunteer_id")
@@ -99,15 +95,11 @@ export default async function SessionDetailsPage({
     .lte("start_date", session.session_date)
     .gte("end_date", session.session_date);
 
-  // 6. Fetch existing attendance
+  // 6. Fetch attendance records
   const { data: attendance, error: attendanceError } = await supabase
     .from("attendance")
     .select("*")
     .eq("session_id", id);
-
-  console.log("Volunteers query error:", volunteersError);
-  console.log("Leaves query error:", leavesError);
-  console.log("Attendance query error:", attendanceError);
 
   const dataError =
     volunteersError || leavesError || attendanceError;
@@ -126,12 +118,52 @@ export default async function SessionDetailsPage({
       )
   );
 
-  // 8. Error messages
+  // 8. Attendance lookup
+  const attendanceMap = new Map(
+    (attendance || []).map((record) => [
+      record.volunteer_id,
+      record,
+    ])
+  );
+
+  // 9. Attendance statistics
+  const presentCount = (attendance || []).filter(
+    (record) => record.status === "PRESENT"
+  ).length;
+
+  const absentCount = (attendance || []).filter(
+    (record) => record.status === "ABSENT"
+  ).length;
+
+  // 10. Fetch audit history
+  const attendanceIds = (attendance || []).map(
+    (record) => record.id
+  );
+
+  let auditLogs: any[] = [];
+  let auditError = false;
+
+  if (attendanceIds.length > 0) {
+    const { data, error: historyError } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("entity_type", "attendance")
+      .in("entity_id", attendanceIds)
+      .order("created_at", { ascending: false });
+
+    auditLogs = data || [];
+    auditError = Boolean(historyError);
+  }
+
+  // 11. Error messages
   const errorMessages: Record<string, string> = {
     missing_fields: "Required information is missing.",
     invalid_status: "Invalid attendance status.",
+    invalid_reason: "Please provide a valid reason (1-1000 characters).",
     session_not_scheduled:
-      "Attendance cannot be changed for this session.",
+      "New attendance cannot be added to this session.",
+    session_not_available:
+      "This session is not available for attendance marking.",
     attendance_check_failed:
       "Failed to check existing attendance.",
     attendance_save_failed:
@@ -145,20 +177,13 @@ export default async function SessionDetailsPage({
       "Failed to complete the session. Please try again.",
   };
 
-  // 9. Create attendance lookup map
-  const attendanceMap = new Map(
-    (attendance || []).map((record) => [
-      record.volunteer_id,
-      record,
-    ])
-  );
-
   return (
     <main
       id="main-content"
       className="min-h-screen bg-gray-50 p-8"
     >
       <div className="mx-auto max-w-6xl">
+
         {/* Back Link */}
         <Link
           href="/admin/attendance"
@@ -172,18 +197,23 @@ export default async function SessionDetailsPage({
           Session Details
         </h1>
 
-        {/* Attendance Success Message */}
+        {/* Success Messages */}
         {saved === "true" && (
           <p className="mt-6 rounded-lg bg-green-100 p-4 text-green-700">
             Attendance saved successfully!
           </p>
         )}
 
-        {/* Session Completion Success Message */}
         {completed === "true" && (
           <p className="mt-6 rounded-lg bg-green-100 p-4 text-green-700">
             Session completed successfully. Missing attendance records
             have been marked as ABSENT.
+          </p>
+        )}
+
+        {unchanged === "true" && (
+          <p className="mt-6 rounded-lg bg-yellow-100 p-4 text-yellow-800">
+            Attendance status is already the same. No changes were made.
           </p>
         )}
 
@@ -224,6 +254,36 @@ export default async function SessionDetailsPage({
           </div>
         </section>
 
+        {/* Attendance Summary */}
+        <section className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl bg-white p-5 shadow">
+            <p className="text-sm text-gray-500">
+              Eligible Volunteers
+            </p>
+            <p className="mt-2 text-2xl font-bold">
+              {eligibleVolunteers.length}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white p-5 shadow">
+            <p className="text-sm text-gray-500">
+              Present
+            </p>
+            <p className="mt-2 text-2xl font-bold text-green-600">
+              {presentCount}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white p-5 shadow">
+            <p className="text-sm text-gray-500">
+              Absent
+            </p>
+            <p className="mt-2 text-2xl font-bold text-red-600">
+              {absentCount}
+            </p>
+          </div>
+        </section>
+
         {/* Complete Session */}
         {session.status === "SCHEDULED" && (
           <section className="mt-6 rounded-xl bg-white p-6 shadow">
@@ -233,7 +293,7 @@ export default async function SessionDetailsPage({
 
             <p className="mt-2 text-sm text-gray-600">
               Completing this session will automatically mark
-              volunteers without attendance records as ABSENT.
+              eligible volunteers without attendance records as ABSENT.
             </p>
 
             <form action={completeSession} className="mt-4">
@@ -259,6 +319,10 @@ export default async function SessionDetailsPage({
             Volunteer Attendance
           </h2>
 
+          <p className="mt-2 text-sm text-gray-600">
+            Provide a reason whenever you mark or correct attendance.
+          </p>
+
           {dataError ? (
             <p className="mt-4 text-red-600">
               Failed to load attendance data.
@@ -272,11 +336,9 @@ export default async function SessionDetailsPage({
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b text-gray-600">
-                    <th className="p-3">Volunteer Code</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Email</th>
-                    <th className="p-3">Phone</th>
-                    <th className="p-3">Mark Attendance</th>
+                    <th className="p-3">Volunteer</th>
+                    <th className="p-3">Contact</th>
+                    <th className="p-3">Attendance</th>
                   </tr>
                 </thead>
 
@@ -292,78 +354,174 @@ export default async function SessionDetailsPage({
                       volunteer.id
                     );
 
+                    const canEdit =
+                      session.status === "SCHEDULED" ||
+                      Boolean(record);
+
                     return (
                       <tr
                         key={volunteer.id}
-                        className="border-b"
+                        className="border-b align-top"
                       >
                         <td className="p-3">
-                          {volunteer.volunteer_code}
+                          <p className="font-medium">
+                            {volunteer.volunteer_code}
+                          </p>
+                          <p className="mt-1 text-gray-600">
+                            {profileData?.full_name || "N/A"}
+                          </p>
                         </td>
 
                         <td className="p-3">
-                          {profileData?.full_name || "N/A"}
+                          <p>{profileData?.email || "N/A"}</p>
+                          <p className="mt-1 text-gray-500">
+                            {profileData?.phone || "N/A"}
+                          </p>
                         </td>
 
-                        <td className="p-3">
-                          {profileData?.email || "N/A"}
-                        </td>
-
-                        <td className="p-3">
-                          {profileData?.phone || "N/A"}
-                        </td>
-
-                        <td className="p-3">
-                          <form
-                            action={markAttendance}
-                            className="flex items-center gap-2"
-                          >
-                            <input
-                              type="hidden"
-                              name="session_id"
-                              value={id}
-                            />
-
-                            <input
-                              type="hidden"
-                              name="volunteer_id"
-                              value={volunteer.id}
-                            />
-
-                            <select
-                              name="attendance_status"
-                              defaultValue={record?.status || ""}
-                              required
-                              disabled={session.status !== "SCHEDULED"}
-                              className="rounded-lg border border-gray-300 p-2"
+                        <td className="min-w-64 p-3">
+                          {canEdit ? (
+                            <form
+                              action={markAttendance}
+                              className="space-y-2"
                             >
-                              <option value="" disabled>
-                                Select
-                              </option>
+                              <input
+                                type="hidden"
+                                name="session_id"
+                                value={id}
+                              />
 
-                              <option value="PRESENT">
-                                Present
-                              </option>
+                              <input
+                                type="hidden"
+                                name="volunteer_id"
+                                value={volunteer.id}
+                              />
 
-                              <option value="ABSENT">
-                                Absent
-                              </option>
-                            </select>
+                              <select
+                                name="attendance_status"
+                                defaultValue={record?.status || ""}
+                                required
+                                className="w-full rounded-lg border border-gray-300 p-2"
+                              >
+                                <option value="" disabled>
+                                  Select status
+                                </option>
 
-                            <button
-                              type="submit"
-                              disabled={session.status !== "SCHEDULED"}
-                              className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                            >
-                              Save
-                            </button>
-                          </form>
+                                <option value="PRESENT">
+                                  Present
+                                </option>
+
+                                <option value="ABSENT">
+                                  Absent
+                                </option>
+                              </select>
+
+                              <textarea
+                                name="reason"
+                                required
+                                minLength={1}
+                                maxLength={1000}
+                                rows={2}
+                                placeholder="Reason for marking or correcting attendance"
+                                className="w-full rounded-lg border border-gray-300 p-2"
+                              />
+
+                              <button
+                                type="submit"
+                                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                              >
+                                {record ? "Save Correction" : "Save Attendance"}
+                              </button>
+                            </form>
+                          ) : (
+                            <p className="text-sm text-gray-500">
+                              No attendance record available for correction.
+                            </p>
+                          )}
+
+                          {record && (
+                            <p className="mt-2 text-xs text-gray-500">
+                              Current status: {record.status}
+                              <br />
+                              Source: {record.source}
+                            </p>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </section>
+
+        {/* Attendance Audit History */}
+        <section className="mt-8 rounded-xl bg-white p-6 shadow">
+          <h2 className="text-xl font-semibold">
+            Attendance Change History
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-600">
+            This section shows recorded attendance changes and their reasons.
+          </p>
+
+          {auditError ? (
+            <p className="mt-4 text-red-600">
+              Failed to load attendance history.
+            </p>
+          ) : auditLogs.length === 0 ? (
+            <p className="mt-4 text-gray-500">
+              No attendance changes recorded yet.
+            </p>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {auditLogs.map((log) => {
+                const oldValues = log.old_values || {};
+                const newValues = log.new_values || {};
+
+                return (
+                  <div
+                    key={log.id}
+                    className="rounded-lg border border-gray-200 p-4"
+                  >
+                    <p className="font-medium">
+                      {log.action === "INSERT"
+                        ? "Attendance Created"
+                        : log.action === "UPDATE"
+                          ? "Attendance Updated"
+                          : "Attendance Deleted"}
+                    </p>
+
+                    {log.action === "UPDATE" && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Previous status: {oldValues.status || "N/A"}
+                        {" → "}
+                        New status: {newValues.status || "N/A"}
+                      </p>
+                    )}
+
+                    {log.action === "INSERT" && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Status: {newValues.status || "N/A"}
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-sm">
+                      <strong>Reason:</strong>{" "}
+                      {newValues.correction_reason || "Not provided"}
+                    </p>
+
+                    <p className="mt-2 text-xs text-gray-500">
+                      {log.created_at
+                        ? new Date(log.created_at).toLocaleString("en-GB", {
+                            timeZone: "Asia/Dhaka",
+                          })
+                        : "Time unavailable"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

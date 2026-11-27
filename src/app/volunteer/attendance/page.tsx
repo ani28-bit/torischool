@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function VolunteerAttendancePage() {
-  // 1. Verify authenticated user
   const supabase = await createClient();
 
+  // 1. Verify authenticated user
   const {
     data: { user },
     error: authError,
@@ -41,7 +41,7 @@ export default async function VolunteerAttendancePage() {
             href="/volunteer/dashboard"
             className="text-sm text-blue-600 hover:underline"
           >
-            ← Back to Dashboard
+            &larr; Back to Dashboard
           </Link>
 
           <h1 className="mt-4 text-3xl font-bold text-gray-900">
@@ -57,7 +57,7 @@ export default async function VolunteerAttendancePage() {
     );
   }
 
-  // 4. Fetch this volunteer's attendance records
+  // 4. Fetch attendance records
   const { data: attendance, error: attendanceError } = await supabase
     .from("attendance")
     .select(`
@@ -77,11 +77,29 @@ export default async function VolunteerAttendancePage() {
     .eq("volunteer_id", volunteer.id)
     .order("marked_at", { ascending: false });
 
-  const presentCount =
-    attendance?.filter((record) => record.status === "PRESENT").length ?? 0;
+  // 5. Include only completed sessions
+  const completedAttendance = (attendance ?? []).filter((record) => {
+    const session = Array.isArray(record.sessions)
+      ? record.sessions[0]
+      : record.sessions;
 
-  const absentCount =
-    attendance?.filter((record) => record.status === "ABSENT").length ?? 0;
+    return session?.status === "COMPLETED";
+  });
+
+  const presentCount = completedAttendance.filter(
+    (record) => record.status === "PRESENT"
+  ).length;
+
+  const absentCount = completedAttendance.filter(
+    (record) => record.status === "ABSENT"
+  ).length;
+
+  const totalSessions = completedAttendance.length;
+
+  const attendancePercentage =
+    totalSessions > 0
+      ? Math.round((presentCount / totalSessions) * 100)
+      : 0;
 
   return (
     <main id="main-content" className="min-h-screen bg-gray-50 p-8">
@@ -90,7 +108,7 @@ export default async function VolunteerAttendancePage() {
           href="/volunteer/dashboard"
           className="text-sm text-blue-600 hover:underline"
         >
-          ← Back to Dashboard
+          &larr; Back to Dashboard
         </Link>
 
         <h1 className="mt-4 text-3xl font-bold text-gray-900">
@@ -98,7 +116,7 @@ export default async function VolunteerAttendancePage() {
         </h1>
 
         <p className="mt-2 text-gray-600">
-          View your attendance records and session history.
+          View your attendance records and completed session history.
         </p>
 
         <div className="mt-6 rounded-xl bg-white p-6 shadow">
@@ -119,11 +137,12 @@ export default async function VolunteerAttendancePage() {
           </p>
         ) : (
           <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            {/* Attendance Statistics */}
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl bg-white p-6 shadow">
-                <p className="text-sm text-gray-500">Total Records</p>
+                <p className="text-sm text-gray-500">Total Sessions</p>
                 <p className="mt-2 text-3xl font-bold text-gray-900">
-                  {attendance?.length ?? 0}
+                  {totalSessions}
                 </p>
               </div>
 
@@ -140,14 +159,24 @@ export default async function VolunteerAttendancePage() {
                   {absentCount}
                 </p>
               </div>
+
+              <div className="rounded-xl bg-white p-6 shadow">
+                <p className="text-sm text-gray-500">
+                  Attendance Percentage
+                </p>
+                <p className="mt-2 text-3xl font-bold text-blue-600">
+                  {attendancePercentage}%
+                </p>
+              </div>
             </div>
 
+            {/* Attendance History */}
             <section className="mt-8 rounded-xl bg-white p-6 shadow">
               <h2 className="text-xl font-semibold text-gray-900">
                 Attendance History
               </h2>
 
-              {attendance && attendance.length > 0 ? (
+              {completedAttendance.length > 0 ? (
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead>
@@ -162,7 +191,7 @@ export default async function VolunteerAttendancePage() {
                     </thead>
 
                     <tbody>
-                      {attendance.map((record) => {
+                      {completedAttendance.map((record) => {
                         const session = Array.isArray(record.sessions)
                           ? record.sessions[0]
                           : record.sessions;
@@ -179,7 +208,7 @@ export default async function VolunteerAttendancePage() {
 
                             <td className="p-3">
                               {session
-                                ? `${session.start_time} - ${session.end_time}`
+                                ? `${session.start_time.slice(0, 5)} - ${session.end_time.slice(0, 5)}`
                                 : "N/A"}
                             </td>
 
@@ -208,7 +237,7 @@ export default async function VolunteerAttendancePage() {
                 </div>
               ) : (
                 <p className="mt-4 text-gray-500">
-                  No attendance records available yet.
+                  No completed session attendance records available yet.
                 </p>
               )}
             </section>

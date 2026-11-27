@@ -29,82 +29,89 @@ export async function markAttendance(formData: FormData) {
   }
 
   // 3. Get form values
-  const sessionId = formData.get("session_id") as string;
-  const volunteerId = formData.get("volunteer_id") as string;
-  const attendanceStatus = formData.get("attendance_status") as string;
+  const sessionId = String(formData.get("session_id") ?? "").trim();
+  const volunteerId = String(formData.get("volunteer_id") ?? "").trim();
+  const attendanceStatus = String(
+    formData.get("attendance_status") ?? ""
+  ).trim();
+  const reason = String(formData.get("reason") ?? "").trim();
 
-  // 4. Validate fields
-  if (!sessionId || !volunteerId) {
-    redirect(`/admin/attendance/${sessionId}?error=missing_fields`);
+  // 4. Validate UUIDs
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!uuidPattern.test(sessionId) || !uuidPattern.test(volunteerId)) {
+    redirect("/admin/attendance?error=invalid_session");
   }
 
+  // 5. Validate status and reason
   if (!["PRESENT", "ABSENT"].includes(attendanceStatus)) {
     redirect(`/admin/attendance/${sessionId}?error=invalid_status`);
   }
 
-  // 5. Check session
-  const { data: session, error: sessionError } = await supabase
-    .from("sessions")
-    .select("id, status")
-    .eq("id", sessionId)
-    .single();
-
-  if (sessionError || !session) {
-    redirect("/admin/attendance?error=session_not_found");
+  if (!reason || reason.length > 1000) {
+    redirect(`/admin/attendance/${sessionId}?error=invalid_reason`);
   }
 
-  if (session.status !== "SCHEDULED") {
-    redirect(`/admin/attendance/${sessionId}?error=session_not_scheduled`);
-  }
-
-  // 6. Check existing attendance
+  // 6. Find existing attendance
   const { data: existingAttendance, error: existingError } =
     await supabase
       .from("attendance")
-      .select("id")
+      .select("id, status")
       .eq("session_id", sessionId)
       .eq("volunteer_id", volunteerId)
       .maybeSingle();
 
   if (existingError) {
+    console.error("Attendance lookup error:", existingError.message);
     redirect(`/admin/attendance/${sessionId}?error=attendance_check_failed`);
   }
 
-  // 7. Insert or update attendance
+  // 7. Avoid unnecessary correction
+  if (existingAttendance?.status === attendanceStatus) {
+    redirect(`/admin/attendance/${sessionId}?unchanged=true`);
+  }
+
+  // 8. Insert new attendance or correct existing attendance
   let saveError;
 
   if (existingAttendance) {
-    const { error } = await supabase
-      .from("attendance")
-      .update({
-        status: attendanceStatus,
-        source: "MANUAL",
-        marked_by: user.id,
-      })
-      .eq("id", existingAttendance.id);
+    const { error } = await supabase.rpc("admin_correct_attendance", {
+      p_attendance_id: existingAttendance.id,
+      p_new_status: attendanceStatus as "PRESENT" | "ABSENT",
+      p_reason: reason,
+    });
 
     saveError = error;
   } else {
-    const { error } = await supabase
-      .from("attendance")
-      .insert({
-        volunteer_id: volunteerId,
-        session_id: sessionId,
-        status: attendanceStatus,
-        source: "MANUAL",
-        marked_by: user.id,
-      });
+    const { error } = await supabase.rpc("admin_mark_attendance", {
+      p_session_id: sessionId,
+      p_volunteer_id: volunteerId,
+      p_status: attendanceStatus as "PRESENT" | "ABSENT",
+      p_reason: reason,
+    });
 
     saveError = error;
   }
 
   if (saveError) {
-    console.error("Attendance save error:", saveError);
+    console.error("Attendance save error:", saveError.message);
+
+    if (saveError.message.includes("Reason")) {
+      redirect(`/admin/attendance/${sessionId}?error=invalid_reason`);
+    }
+
+    if (saveError.message.includes("Session")) {
+      redirect(`/admin/attendance/${sessionId}?error=session_not_available`);
+    }
+
     redirect(`/admin/attendance/${sessionId}?error=attendance_save_failed`);
   }
 
-  // 8. Refresh page
+  // 9. Refresh relevant pages
   revalidatePath(`/admin/attendance/${sessionId}`);
+  revalidatePath("/admin/attendance");
+  revalidatePath("/volunteer/attendance");
 
   redirect(`/admin/attendance/${sessionId}?saved=true`);
 }
